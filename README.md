@@ -8,7 +8,7 @@ Maryland Transportation Institute · Department of Civil & Environmental Enginee
 
 ## What this is
 
-As light-duty travel electrifies, the per-gallon fuel tax that funds state roads erodes. Whether any replacement instrument — per-kWh charging surcharges, flat registration fees, distance-based road-use charges, corridor tolls — can recover the lost revenue *adequately* and with *acceptable distributional incidence* depends on jointly distributed microscopic quantities: who owns EVs, how far they drive, and where and how they charge.
+As light-duty travel electrifies, the per-gallon fuel tax that funds state roads erodes. Whether any replacement instrument — per-kWh charging surcharges, flat registration fees, distance-based road-use charges, corridor tolls — can recover the lost revenue adequately depends on jointly distributed microscopic quantities: who owns EVs, how far they drive, and where and how they charge.
 
 This repository contains the complete modeling chain that answers that question for Maryland:
 
@@ -23,11 +23,11 @@ flowchart LR
     F --> G[MATSim / UrbanEV simulation<br/>148,302 EV owners<br/>AADT-congested network]
     G --> H[Shadow gas-tax gap R*]
     G --> I[Policy instruments:<br/>surcharges, fees, RUC, tolls]
-    H --> J[Adequacy + per-agent incidence<br/>Suits index]
+    H --> J[Revenue adequacy comparison]
     I --> J
 ```
 
-Two plain conditional variational autoencoders (CVAEs) synthesize the household population and its activity-travel demand from survey microdata. A registration-calibrated binomial logit assigns EV ownership. Vehicles, chargers, and geolocated activities are attached, and MATSim with the UrbanEV extension simulates every charging decision of Maryland's 148,302 EV owners on a network carrying observed recurring congestion. The converged baseline prices the shadow gas-tax gap (R* ≈ $33.3M/yr) and every candidate recovery instrument is evaluated on the same simulated behavior, down to per-agent tax incidence.
+Two plain conditional variational autoencoders (CVAEs) synthesize the household population and its activity-travel demand from survey microdata. A registration-calibrated binomial logit assigns EV ownership. Vehicles, chargers, and geolocated activities are attached, and MATSim with the UrbanEV extension simulates every charging decision of Maryland's 148,302 EV owners on a network carrying observed recurring congestion. The converged baseline prices the shadow gas-tax gap (R* ≈ $33.3M/yr) and every candidate recovery instrument is evaluated on the same simulated behavior.
 
 ## Repository layout
 
@@ -66,7 +66,6 @@ analysis/                     post-run analysis + publication figures (pubfig st
                               · AADT time-variant network builder (v3: ramp/mainline
                                 matching, K-factor profiles, BPR α=0.15 β=4/8)
                               · revenue frontiers (Laffer), policy ladder
-                              · equal-yield incidence by income octile, Suits indices
                               · toll diversion mapping vs no-toll reference
                               · congestion + free-speed maps, validation panels
                               · ChargePoint occupancy panel collector + validation
@@ -133,17 +132,17 @@ The baseline runs a deterministic 25% fleet sample (plug counts ×0.25 floor 1, 
 
 ## Headline results
 
-| Instrument | Rate | Revenue | % of R* | Suits |
-|---|---|---|---|---|
-| Gas-tax benchmark | $0.466/gal | $33.3M | 100 | −0.176 |
-| Public surcharge (ceiling) | +$2.00/kWh | $9.2M | 28 | −0.276 |
-| Home surcharge at R* | +$0.12/kWh | $33.3M | 100 | −0.142 |
-| Flat registration fee | $225/yr | $33.3M | 100 | −0.202 |
-| Universal road-use charge | 1.6¢/mi | $33.3M | 100 | −0.175 |
-| Interstate road-use charge | 3.0¢/mi | $31.1M | 93 | −0.164 |
-| Corridor toll | 5.7¢/mi | $30.4M | 91 | −0.177 |
+| Instrument | Rate | Revenue | % of R* |
+|---|---|---|---|
+| Gas-tax benchmark | $0.466/gal | $33.3M | 100 |
+| Public surcharge (ceiling) | +$2.00/kWh | $9.2M | 28 |
+| Home surcharge at R* | +$0.12/kWh | $33.3M | 100 |
+| Flat registration fee | $225/yr | $33.3M | 100 |
+| Universal road-use charge | 1.6¢/mi | $33.3M | 100 |
+| Interstate road-use charge | 3.0¢/mi | $31.1M | 93 |
+| Corridor toll | 5.7¢/mi | $30.4M | 91 |
 
-Public surcharges fail structurally (small, elastic base leaking to home charging and PHEV gasoline). Distance-based instruments recover the gap while reproducing the fuel tax's incidence, losing only 4–6% of tolled VMT to diversion.
+Public surcharges fail structurally (small, elastic base leaking to home charging and PHEV gasoline). Distance-based instruments recover the gap, losing only 4–6% of tolled VMT to diversion.
 
 **Validation:** population TVD 0.045 (held-out survey) / 0.070 (independent ACS); Cramér's V error 0.057; trip TVDs 0.036–0.063; county fleet MAPE 3.1% (r>0.999); ChargePoint occupancy r=0.78, session starts r=0.93 (0.84 daytime); emergent PHEV utility factor 0.50–0.59 vs EPA rated 0.58; seed-replicate CVs ≤1.2% on all headline metrics.
 
