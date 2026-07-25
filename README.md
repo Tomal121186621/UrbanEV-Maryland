@@ -2,7 +2,7 @@
 
 **A generative agent-based framework for electric-vehicle charging demand and road-funding policy analysis in Maryland.**
 
-Maryland Transportation Institute · Department of Civil & Environmental Engineering · University of Maryland, College Park
+Center for Multimodal Mobility · Department of Civil & Environmental Engineering · University of Maryland, College Park
 
 ---
 
