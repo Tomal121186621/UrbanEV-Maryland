@@ -1,0 +1,5 @@
+scenario_id,description,home_cost,l2_cost,dcfc_cost,tesla_cost
+T1_state_public_5c,State public-EVSE +5c/kWh surcharge (Iowa/KY-style state-led tax on public chargers; home untouched),0.139,0.32,0.48,0.45
+T2_state_public_10c,State public-EVSE +10c/kWh surcharge (aggressive; tests upper bound of public-only revenue),0.139,0.37,0.53,0.50
+T3_utility_evrider_3c,PSC EV-rider sub-tariff home +3c/kWh (BGE Smart Energy Pricing / Potomac Edison EV-TOU model; public untouched),0.169,0.27,0.43,0.40
+T4_combined_5c_2c,Combined state +5c public AND utility EV-rider +2c home (coordinated reform; closes ~$10M net gap),0.159,0.32,0.48,0.45

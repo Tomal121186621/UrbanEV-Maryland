@@ -1,0 +1,403 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{mathptmx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{caption}
+\captionsetup{font=small}
+\usepackage{titlesec}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\setlength{\parskip}{2pt}
+
+\title{\textbf{UrbanEV--Maryland: Full Modeling Chain, Calibration, Scoring, and
+Policy Design}\\[4pt]\large From survey microdata to congestion-aware EV charging
+simulation and road-revenue policy analysis}
+\author{UrbanEV--Maryland Project \\ University of Maryland}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent This report documents the complete modeling chain of the UrbanEV--Maryland
+study: (i) two plain conditional variational autoencoders (CVAEs) that synthesize the
+Maryland household population and person-day travel from the 2017--18 MWCOG Regional
+Travel Survey; (ii) a county-calibrated EV-ownership logit and market-share-based
+vehicle assignment producing the 148{,}302-agent 2026 EV fleet; (iii) attribute
+assignment (home/workplace chargers, income-scaled cost sensitivity, per-model
+gasoline fallback costs); (iv) an agent-based charging simulation (MATSim/UrbanEV)
+on a time-variant network carrying observed 2024 traffic loads; and (v) a policy
+experiment suite built around the shadow gas-tax gap $R^{*}\!\approx\!\$33.3$M/yr.
+We give the full charging-behaviour scoring function, describe every calibration
+step and its data source, report the behavioural-specification ablation that led to
+the final PHEV gasoline-fallback model, and summarize validation against six
+independent data sources. All parameter values are those of the final baseline
+configuration.
+\end{abstract}
+
+\section{Pipeline overview}
+The chain runs strictly upstream$\rightarrow$downstream; no downstream information
+feeds back into upstream fitting:
+\begin{enumerate}\itemsep1pt
+  \item \textbf{Survey cleaning} — codebook-driven cleaning of the MWCOG Regional
+  Travel Survey (RTS 2017--18): deduplication to one row per (person, trip)
+  (163{,}290 trips; 21{,}788 households; 41{,}914 persons), sentinel imputation,
+  and feasibility filters (home-anchored chains, temporal monotonicity, 24-h day
+  budget, distance $\le$200 mi).
+  \item \textbf{Population CVAE} — household-level generative model producing the
+  6.22M-person synthetic Maryland population.
+  \item \textbf{Trip CVAE} — person-day generative model conditioned on
+  household/person attributes producing activity--travel chains.
+  \item \textbf{EV ownership} — Burra--Cirillo logit with county constants
+  calibrated to MDOT MVA registrations (Jan 2026).
+  \item \textbf{Vehicle and attribute assignment} — make/model by MVA market
+  shares; chargers, cost sensitivity, gasoline-fallback prices.
+  \item \textbf{Plans construction} — OSM-POI geolocation preserving generated
+  trip distances; 3-day (72 h) tiling; MATSim plans and EV fleet files.
+  \item \textbf{UrbanEV simulation} — MATSim co-evolutionary loop with the
+  charging-behaviour scoring of Section~\ref{sec:scoring} on an AADT-loaded
+  time-variant network.
+  \item \textbf{Policy experiments} — surcharge sweeps and corridor tolls
+  evaluated against the shadow gas-tax gap.
+\end{enumerate}
+
+\section{Upstream generative models}
+\subsection{Household (population) CVAE}
+A plain VAE over fixed-length household vectors: household attributes plus up to
+eight person slots (age, gender, license, employment, etc.) with a slot mask.
+Mixed-type decoder heads (softmax cross-entropy for categoricals; discretized
+numeric heads), survey-weighted ELBO with $\beta$-warm-up. Trained on the cleaned
+survey with a \emph{household-grouped} train/validation/test/holdout split so that
+no household contributes to both fitting and evaluation. Sampling to Maryland scale
+yields 6{,}217{,}062 persons in $\sim$2.4M households with home tracts and jittered
+home coordinates.
+
+\subsection{Trip (person-day) CVAE}
+A conditional VAE over person-day vectors: trip count plus up to twelve trip slots
+(activity, mode, log-binned distance, travel-time band, departure half-hour band),
+conditioned on household and person attributes (county, income, size, workers,
+vehicles, license, employment, home type, gender, age). Feasibility is enforced at
+decode by a repair step: departures are sorted and reassigned monotonically, the
+chain is closed at home, and dwell durations are derived from consecutive
+departures; the result is 100\% feasible chains by construction. Distances are
+generated \emph{directly} (log-binned), so network geolocation cannot distort
+travel demand.
+
+\subsection{Upstream validation (held-out)}
+Marginal distributions: mean total-variation distance 0.045 vs the held-out survey
+and 0.069 vs ACS 2020--24 county tables; joint structure: mean absolute
+Cram\'er's-V error 0.057; trip-distance quartiles 1.9/5.0/11.8 mi vs NHTS-2017
+Maryland 1.9/4.6/11.6 mi; memorization checked by distance-to-closest-record.
+County-level fidelity: mean attribute TVD 0.097 across 24 counties.
+
+\section{EV ownership model and calibration}
+\label{sec:own}
+Ownership follows the Maryland-estimated Burra--Cirillo binary logit (Table-2
+Model-2 coefficients used verbatim): income 0.305, single-family dwelling 0.479,
+bicycles 0.136, workers $-0.269$, transit trips $-0.044$, auto distance $-0.004$,
+home office 0.783, charge-at-work 0.799, public chargers within 5 mi 0.002, L2
+within 1 km 0.031, DCFC within 5 mi 0.032, constant $-7.676$. Charger-access
+covariates are computed from the AFDC station registry against each household's
+home location.
+
+\textbf{County calibration.} A county-specific constant $\delta_c$ is added to the
+utility and solved by bisection so that expected owners per county match MDOT MVA
+registrations as of January 2026 (148{,}302 total; 73.8\% BEV). Post-calibration
+county MAPE is 3.1\% with $r>0.999$ --- reported as a \emph{calibration check},
+not validation. Independent validation of the assignment uses the demographic
+composition of synthetic owners against survey EV owners.
+
+\section{Vehicle and attribute assignment}
+\label{sec:attr}
+\textbf{Make/model.} Within each powertrain, one of 57 model archetypes is sampled
+from MVA market shares (Model Y 16.4\%, Model 3 8.2\%, Cybertruck 4.1\%, \ldots);
+each archetype carries battery capacity, consumption (kWh/100 km), DC-peak power,
+and connector permissions. Charger permissions honour physical capability:
+\textbf{18 of 21 PHEV archetypes have no DC port} and receive \texttt{L1,L2} only;
+Tesla Superchargers admit Teslas.
+
+\begin{figure}[h!]\centering
+\includegraphics[width=0.95\textwidth]{../validation_package/panels/val4_ev_assignment.pdf}
+\caption{EV assignment: (a) county calibration check against MVA registrations
+(MAPE 3.1\%); (b) assigned fleet composition from MVA market shares (blue BEV,
+orange PHEV).}
+\label{fig:fleet}
+\end{figure}
+
+\textbf{Home/workplace charging.} Home-charger probability by dwelling type
+$\times$ tenure $\times$ income (single-family owners $\approx$0.94; apartment
+renters $\approx$0.35), rescaled per county so county means match the NREL
+submission-278 access curve at the 2026 penetration ($\approx$0.96 statewide);
+among home chargers, 88\% L2 (7.2 kW) / 12\% L1 (1.4 kW), lower L2 shares for
+low-income and multifamily households. Workplace chargers (7.2 kW) follow the
+survey charge-at-work flag.
+
+\textbf{Behavioural attributes.} Income-scaled marginal utility of money
+$\beta_n=-(125000/y_n)^{1/2}$; value of time from income; initial SOC
+$\sim$Beta(4,2) for BEVs, U(0.30,0.90) for PHEVs; range-anxiety threshold 0.20
+(BEV-relevant only); \textbf{per-model gasoline fallback cost} (Section
+\ref{sec:scoring}) attached to every PHEV.
+
+\textbf{PHEV gasoline cost.} For model $v$:
+$g_v = P^{\mathrm{gas}}_v/(\eta^{\mathrm{cs}}_v\,\kappa_v)$ where
+$P^{\mathrm{gas}}_v$ is the AAA Maryland pump price (2026-07-16: regular \$3.881,
+premium \$4.805 for the six premium-fuel luxury buckets),
+$\eta^{\mathrm{cs}}_v$ the EPA charge-sustaining (``gas-only'') combined fuel
+economy from fueleconomy.gov (all 21 archetypes directly verified), and $\kappa_v$
+the electric consumption. Range \$0.21--\$0.56 per kWh-equivalent; fleet mean
+\$0.364.
+
+\section{Plans construction}
+Each agent's generated chain is geolocated: home at the household's coordinate;
+every other activity at the generated trip distance in the direction of a real
+OSM point-of-interest of the matching activity type (land-use-consistent bearing),
+with the Euclidean radius set to generated distance divided by a detour factor of
+1.30 so that network routing reproduces the generated VMT. The single survey day
+is tiled $\times$3 into a 72-h plan so charging cycles (multi-day SOC dynamics)
+can equilibrate. Outputs: MATSim plans with all demographics as person attributes
+and the electric-fleet file with per-vehicle battery, initial SOC, and permissions.
+
+\section{Network and observed congestion loading}
+\label{sec:net}
+The road network (695k links, EPSG:26985) carries \textbf{observed} background
+congestion rather than simulated background agents: EVs are $\sim$3\% of Maryland
+traffic, so the empirically relevant coupling is congestion$\rightarrow$EV.
+From the MDOT SHA AADT segment layer (10{,}001 segments; latest published vintage
+2024), segments are matched to major-class links ($\le$60 m; 120{,}068 links
+matched). Hourly directional volumes use a two-peak weekday profile rescaled to
+each segment's K-factor; congested speeds follow BPR,
+$s_h = s_0/(1+0.15\,(v_h/c)^4)$, floored at $0.25\,s_0$; unmatched major links
+inherit class-median factors. The result is written as MATSim network change
+events (repeated across the 3 simulated days) and activates with one config flag.
+\textbf{Parameter provenance.} The volume--delay parameters are $\alpha=0.15$,
+$\beta=4$ for arterials (the original BPR values, the national default) and
+$\beta=8$ for freeways, within the published freeway range: the FHWA-endorsed
+``updated BPR'' of NCHRP Report 387 uses $\alpha=0.20$, $\beta=10$ for
+uninterrupted facilities, and the Horowitz/NCHRP-365 freeway curves imply
+$\alpha=0.83$--$0.88$, $\beta=5.5$--$9.8$. Maryland's own MPO model (MWCOG/TPB)
+uses conical volume--delay functions that double travel time exactly at capacity
+--- steeper than any of these BPR forms. Our curve is therefore \emph{milder at
+and above capacity than both the freeway-specific literature and regional
+practice}. Consistently, the imposed corridor-average peak factors (0.92--0.96)
+are lighter than observed area-wide travel-time indices (TTI 1.31 Washington,
+1.25 Baltimore; worst observed segments TTI 2.0--3.8 in the 2023 MDOT Mobility
+Report, which our floored bottleneck links at factor 0.25 mirror in scale). The
+congestion field is accordingly presented as a conservative, count-anchored
+lower bound whose corridor structure --- not its absolute depth --- carries the
+behavioural signal.
+
+\textbf{Verification:} realized simulated speeds on the most-loaded motorway links
+are 11 mph in both peaks (equal to the imposed values) and 43 mph at 3 a.m.
+($\approx$free flow).
+
+\section{Simulation design and sampling}
+\label{sec:sim}
+The UrbanEV/MATSim co-evolutionary loop iterates mobsim $\rightarrow$ scoring
+$\rightarrow$ replanning: agents mutate charging type/location choices (and
+routes), retaining plans by score. The working sample is a deterministic
+hash-based \textbf{25\% agent sample} (stable across runs): plug counts scaled by
+0.25 (min 1), \texttt{flowCapacityFactor}=0.25,
+\texttt{storageCapacityFactor}=$0.25^{0.75}\!\approx\!0.35$; results scale by 4.
+Baselines run 50 iterations from cold start; policy scenarios warm-start from the
+converged baseline plans and re-converge for 50 iterations. Equivalence of the
+25\% sample to the 100\% fleet was verified on charger-type shares in earlier
+paired runs.
+
+\section{Charging-behaviour scoring function}
+\label{sec:scoring}
+Each agent's plan score is the standard Charypar--Nagel activity--travel utility
+$S^{\text{base}}_n$ plus a charging utility:
+\begin{equation}
+S_n = S^{\text{base}}_n + \sum_{s\in\mathcal{C}_n} u_s + \Phi_n .
+\end{equation}
+For a session $s$ at charger type $k\in\{$home, work, L2, L2F, DCFC, Tesla$\}$
+delivering $e_s$ kWh at power $P_s$ with walk distance $w_s$ at time $t_s$:
+\begin{align}
+u_s = \underbrace{\beta_n\,\alpha\,e_s\big[p_{k}\,m_{k}(t_s)+\tau_{k}\big]}_{\text{energy cost + excise}}
++ \underbrace{\gamma_w\big(1-e^{-0.005 w_s}\big)}_{\text{walk access}}
++ \underbrace{\gamma_t\,\tfrac{3600\,e_s}{P_s}\,\mathbf{1}[k\in\{\text{DCFC, Tesla}\}]}_{\text{dwell cost, dedicated stops only}}
++ \gamma_h\,\mathbf{1}[k{=}\text{home}\wedge h_n].
+\end{align}
+The time-of-use multiplier $m_k(t)$ applies to home charging only (utility
+tariff; 0.70 off-peak nights, 1.60/1.47 morning, 0.92 midday, 1.14 evening);
+public and workplace prices are flat. The dwell opportunity cost applies
+\emph{only} at dedicated fast-charge stops; home, workplace, and public L2 are
+park-and-charge (the vehicle charges during an activity performed anyway).
+
+\textbf{Powertrain-specific battery terms.} BEVs receive range anxiety below
+threshold $\theta_n$, a severe empty-battery penalty, and an end-of-day SOC
+balance penalty:
+\begin{equation}
+\Phi^{\mathrm{BEV}}_n=\sum_a\Big[\gamma_a\tfrac{\theta_n-\sigma_a}{\theta_n}
+\mathbf{1}[0<\sigma_a<\theta_n]+\gamma_e\mathbf{1}[\sigma_a{=}0]\Big]
++\gamma_b|\Delta\sigma_n|\,\mathbf{1}[\Delta\sigma_n\le 0].
+\end{equation}
+PHEVs replace all three with the \textbf{charge-sustaining gasoline fallback}:
+the traction-energy deficit of every leg (the demand the battery could not
+supply; captured where the battery clamps at zero) is driven on gasoline and
+priced at the vehicle's fuel cost,
+\begin{equation}
+\Phi^{\mathrm{PHEV}}_n=\beta_n\,\alpha\sum_{\ell} g_{v(n)}\,\Delta e^{\mathrm{def}}_{\ell},
+\qquad g_v = \frac{P^{\mathrm{gas}}_v}{\eta^{\mathrm{cs}}_v\,\kappa_v}.
+\end{equation}
+A PHEV is therefore never stranded; it trades electricity against gasoline on
+cost, and its utility factor is an \emph{emergent output}.
+
+\begin{table}[h!]\centering\small
+\caption{Scoring parameters and prices (final baseline).}
+\begin{tabular}{llll}
+\toprule
+Symbol & Meaning & Value & Source \\
+\midrule
+$\beta_n$ & marg.\ utility of money & $-(125000/y_n)^{1/2}$ & income-scaled \\
+$\gamma_w$ & walking & $-1.0$ & Geurs--van Wee form \\
+$\gamma_t$ & dwell (DCFC/Tesla) & $-6/3600$ util/s & performing-utility anchor \\
+$\gamma_a,\gamma_e,\gamma_b$ & BEV battery terms & $-6,-15,-4$ & UrbanEV \\
+$p_{\text{home}}$ & home tariff & \$0.139/kWh & BGE/Pepco/Delmarva/SMECO \\
+$p_{\text{work}}$ & workplace & \$0.00 & employer-paid \\
+$p_{\text{L2}}$ & public L2 & \$0.155/kWh & AFDC free share $\times$ operator rate \\
+$p_{\text{L2F}}$ & free public L2 & \$0.00 & AFDC ``Free'' stations (sensitivity) \\
+$p_{\text{DCFC}}$ & DCFC & \$0.43/kWh & EVgo/Electrify America \\
+$p_{\text{Tesla}}$ & Supercharger & \$0.40/kWh & MD site rates, time-weighted \\
+$\tau_k$ & road excise & \$0 (policy lever) & --- \\
+$g_v$ & PHEV gas cost & \$0.21--0.56/kWh & EPA CS-mpg $\div$ AAA price \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Behavioural-specification ablation (dwell-cost scope)}
+The dwell-cost scope was selected by ablation against independent observables,
+not assumption:
+\begin{center}\small
+\begin{tabular}{lllll}
+\toprule
+Variant & Dwell cost applies to & Emergent UF & Public L2 share & Occupancy $r$\\
+\midrule
+v1 & all charging & 0.22 (60\% never charge) & --- & --- \\
+v2 & all public & 0.58 mid-run & collapses to 2\% & 0.63 \\
+v3 & DCFC only & 0.50--0.59 & 4--7\% (price error) & 0.69 \\
+\textbf{v4 (final)} & DCFC only + corrected prices & \textbf{0.50--0.59} & \textbf{8--11\%} & \textbf{0.77} \\
+\midrule
+Benchmarks & & 0.3--0.6 obs / 0.58 rated & & 0.83 prior \\
+\bottomrule
+\end{tabular}
+\end{center}
+v3$\rightarrow$v4 additionally repaired a pricing-input error: the baseline had
+been billing all public charging at a legacy flat \$0.40/kWh; v4 restores the
+researched per-type prices with the public-L2 level derived from AFDC:
+38\% of Maryland public L2 \emph{ports} are free (415 of 1{,}391 stations
+explicitly ``Free''), so the effective price is $0.62\times\$0.25=\$0.155$/kWh.
+A \emph{discrete} sensitivity (station-level free vs paid, type \texttt{L2F} at
+the AFDC-matched free stations, paid L2 at \$0.25) runs alongside the policy
+sweep.
+
+\section{Validation summary (final baseline)}
+\begin{center}\small
+\begin{tabular}{llll}
+\toprule
+Check & Metric & Result & Benchmark \\
+\midrule
+Population marginals (held-out) & TVD & 0.045 & $<0.10$ \\
+Population marginals (ACS) & TVD & 0.069 & $<0.10$ \\
+Joint associations & Cram\'er's-V err & 0.057 & $<0.10$ \\
+Trips vs NHTS-2017 MD & quartiles (mi) & 1.9/5.0/11.8 & 1.9/4.6/11.6 \\
+EV totals by county & MAPE & 3.1\% & calibration check \\
+Charging venue (energy) & home share & 82\% & $\sim$80\% (DOE) \\
+L2 occupancy shape & Pearson $r$ & $0.78\pm0.01$ (4 seeds) & ChargePoint panel \\
+Public session starts & Pearson $r$ & 0.93 (24 h) / 0.84 daytime & two-peak structure \\
+Charging incidence & \%/day & 18--25\% & 18--20\% (ATEAM) \\
+PHEV utility factor & energy-weighted & 0.50--0.59 & 0.3--0.6 obs / 0.58 rated \\
+Peak congestion & realized speed & 11 mph peak / 43 night & AADT-imposed \\
+\bottomrule
+\end{tabular}
+\end{center}
+The ChargePoint panel is our own purpose-built occupancy dataset (1{,}755{,}160
+polls at 455 Maryland stations over 23 days, 99.8\% AFDC crosswalk); occupancy
+$r$ reflects connected-vs-charging semantics documented separately.
+
+
+\subsection{Uncertainty quantification and price sensitivity}
+Three seed replicates of the baseline, the T1 public surcharge, and the T5
+corridor toll (50 iterations each) yield coefficients of variation of 0.1\%
+(home energy share), 1.2\% (public energy share), 1.1\% (occupancy $r$), 0.5\%
+(T1 revenue), and 0.04\% (T5 toll revenue): stochastic simulation noise is
+negligible relative to all reported effects, and headline quantities are cited
+as seed means. Varying all public charging prices by $\pm 25\%$ moves the public
+energy base by $\mp 13$--$15\%$ and bounds the public-surcharge revenue ceiling
+between \$8.0M and \$10.6M (24--32\% of $R^{*}$): the structural-inadequacy
+conclusion holds with roughly threefold headroom across the plausible
+price-sensitivity range.
+
+\section{Contributions relative to upstream UrbanEV}
+\begin{enumerate}\itemsep1pt
+  \item \textbf{PHEV charge-sustaining gasoline fallback} replacing stranded-BEV
+  penalties: utility factors become emergent (0.50--0.59 vs EPA 0.58) rather than
+  assumed; deficit energy is logged per agent, enabling honest electric-VMT
+  accounting.
+  \item \textbf{Dwell-cost taxonomy} (dedicated-stop vs park-and-charge), selected
+  by ablation against observed occupancy and UF.
+  \item \textbf{Per-agent marginal utility of money} (income-scaled) in charging
+  scoring; per-type 5-way public pricing with fully sourced Maryland prices,
+  including the AFDC free-station share and a station-level free/paid sensitivity.
+  \item \textbf{Physically correct charger permissions} (18/21 PHEV archetypes
+  L2-only; Tesla-only Superchargers).
+  \item \textbf{Observed-congestion coupling}: AADT/K-factor/BPR time-variant
+  network — charging behaviour responds to real peak travel times; published
+  EV-charging ABMs run empty networks or post-process charging.
+  \item \textbf{Dual-sided validation}: charging behaviour against an
+  independently collected occupancy panel \emph{and} traffic conditions against
+  MDOT counts, plus a five-stage upstream validation with held-out data.
+  \item \textbf{From-scratch generative population/travel pipeline} with grouped
+  splits, feasibility-by-construction decoding, and distance-faithful geolocation.
+\end{enumerate}
+
+\section{Policy design}
+\label{sec:policy}
+\textbf{Target.} The shadow gas-tax gap $R^{*}$ is the annual state fuel-tax
+revenue foregone because EV miles are not gasoline miles: electric VMT of each
+agent (PHEVs: emergent electric share) $\times$ counterfactual fuel consumption of
+a matched ICE vehicle (per-model EPA mpg lookup) $\times$ the Maryland motor-fuel
+rate (\$0.466/gal FY2027). Baseline estimate $R^{*}\approx\$33.3$M/yr; PHEV
+gasoline miles already pay the tax and are excluded.
+
+\textbf{Instruments} (all warm-started from the converged baseline; 50
+iterations; behavioural response endogenous):
+\begin{enumerate}\itemsep1pt
+  \item \emph{Public surcharge sweep}: $+10,25,50,100,200$\textcent/kWh on all
+  public types — traces the public-charging Laffer curve and provider
+  substitution (base flight to home charging).
+  \item \emph{Home surcharge sweep}: $+10,22,40$\textcent/kWh on residential
+  charging — the broad-base instrument.
+  \item \emph{Policy tiers} T1--T4: public $+5$; public $+10$; home $+3$;
+  combined home $+2$ \& public $+5$ (\textcent/kWh).
+  \item \emph{Corridor VMT tolls} (enabled by the congestion-aware network):
+  T5 $=5.7$\textcent/mi on the six busiest EV corridors (I-95, US-50, I-495,
+  I-695, I-270, I-70; 28\% of EV VMT), T6 $=3.0$\textcent/mi on all interstates
+  (52\% of EV VMT); accounting rates that close $R^{*}$ exactly, with simulated
+  diversion measuring revenue erosion. A universal RUC equivalent is
+  1.6\textcent/mi $\approx$ the per-mile gas tax of a 28-mpg vehicle — an
+  internal consistency check.
+\end{enumerate}
+\textbf{Structural finding framing.} Public charging carries only $\sim$6\% of
+charged energy in the corrected model, so public-only surcharges are structurally
+incapable of closing $R^{*}$ at any plausible price; recovery requires the home
+base, mileage-based instruments, or registration fees. Incidence is evaluated by
+income octile, powertrain, home-charger access, and county, using per-agent
+payments.
+
+\section{Limitations}
+Travel demand is fixed (charging/route choice only; no mode or destination
+response); transit and non-motorized legs are not simulated; congestion is
+speed-based (no queue spillback) at 2024 observed levels; DCFC demand is
+structurally under-represented because inter-regional long-distance travel is
+absent from the synthetic day patterns (DCFC-targeted levers are therefore
+conservative); public L2 volume reflects a uniform effective price in the
+baseline (station-level free/paid sensitivity reported separately); home
+charging is unmanaged (no smart-charging response); the L2$\leftrightarrow$work
+margin retains slow residual drift at iteration 50; the ChargePoint occupancy
+comparison inherits connected-vs-charging semantics.
+
+\end{document}

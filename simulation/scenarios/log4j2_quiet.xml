@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+  <Appenders>
+    <Console name="Console" target="SYSTEM_OUT">
+      <PatternLayout pattern="%d{ISO8601} %-5p %c{1}:%L %m%n"/>
+    </Console>
+  </Appenders>
+  <Loggers>
+    <!-- expected, non-fatal: EV wanted a charger that was occupied/absent. Silence the flood.
+         The MD fork uses se.urbanEV.charging.VehicleChargingHandler (not the matsim-contrib one). -->
+    <Logger name="se.urbanEV.charging.VehicleChargingHandler" level="OFF"/>
+    <Logger name="se.urbanEV.charging" level="WARN"/>
+    <Logger name="org.matsim.contrib.ev.charging.VehicleChargingHandler" level="OFF"/>
+    <Root level="INFO"><AppenderRef ref="Console"/></Root>
+  </Loggers>
+</Configuration>

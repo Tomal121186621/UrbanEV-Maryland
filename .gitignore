@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+target/
+*.jar
+output/
+outputs/
+checkpoints/
+data/
+*.xml.gz
+*.parquet
+*.db
+*.zip
+.DS_Store

@@ -1,0 +1,12 @@
+sw_pub_10c
+sw_pub_25c
+sw_pub_50c
+sw_pub_100c
+sw_pub_200c
+sw_home_10c
+sw_home_22c
+sw_home_40c
+sw_T1
+sw_T2
+sw_T3
+sw_T4

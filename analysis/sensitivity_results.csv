@@ -1,0 +1,9 @@
+param,val,tag,n,home,public,work,tot_MWh,mean_kwh
+alphaScaleCost,0.5,alphaSca_lo,20673,0.771,0.156,0.073,371.7,17.98
+alphaScaleCost,1.5,alphaSca_hi,19524,0.776,0.145,0.079,332.0,17.01
+defaultRangeAnxietyThreshold,0.1,defaultR_lo,20044,0.774,0.15,0.076,351.3,17.53
+defaultRangeAnxietyThreshold,0.3,defaultR_hi,20167,0.776,0.15,0.073,352.3,17.47
+socDifferenceUtility,-2.0,socDiffe_lo,19933,0.774,0.151,0.075,351.8,17.65
+socDifferenceUtility,-6.0,socDiffe_hi,20201,0.778,0.148,0.075,352.2,17.44
+publicChargingCost,0.3,publicCh_lo,20093,0.767,0.159,0.074,351.6,17.5
+publicChargingCost,0.5,publicCh_hi,20217,0.777,0.146,0.076,350.7,17.35
