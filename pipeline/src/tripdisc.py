@@ -18,7 +18,7 @@ from src.trips import (K_MAX, PAD, HOME, DAY, DEP_BIN, N_DEP_BINS,   # noqa: E40
 MAGS = ["logdist", "travel"]               # magnitude bands (dwell is DERIVED, not modelled)
 N_MAG_BINS = 48
 
-# ACTIVITY-TIME model: each trip's DEPARTURE is its own categorical half-hour band
+# ACTIVITY-TIME model: each trip's DEPARTURE is its own categorical quarter-hour band
 # (depb_s), learned directly like distance — not derived cumulatively. This reproduces
 # the AM/PM/midday departure profile by construction; dwell = gap between consecutive
 # activities is derived at decode. Monotone order enforced in repair (sort by departure).
@@ -54,7 +54,7 @@ def add_bands(day, edges):
             b = np.clip(np.digitize(lv, e[1:-1]), 0, N_MAG_BINS - 1).astype(float)
             b[np.isnan(lv)] = -1                 # PAD sentinel category
             day[f"{m}b_{s}"] = b.astype(int)
-    for s in range(K_MAX):                        # per-trip departure half-hour band
+    for s in range(K_MAX):                        # per-trip departure quarter-hour band
         d = pd.to_numeric(day[f"dep_{s}"], errors="coerce").to_numpy(float)
         b = np.clip(d // DEP_BIN, 0, N_DEP_BINS - 1)
         b[np.isnan(d)] = -1
@@ -74,7 +74,7 @@ def _band_to_val(b, m, edges, rng):
 
 def repair_disc(dec, i, edges, rng):
     """Feasible trip list from an ACTIVITY-TIME decoded sample. Each trip's departure is
-    decoded from its own half-hour band; the departure VALUES are sorted and re-assigned
+    decoded from its own quarter-hour band; the departure VALUES are sorted and re-assigned
     to slots in order (slot 0 = earliest departure), while activities/modes/distances keep
     their slot order (home-anchored chain, last = home). This wins on all four at once:
     the departure profile is exactly preserved, activities stay ordered, departures are
