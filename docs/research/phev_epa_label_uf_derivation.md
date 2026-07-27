@@ -50,3 +50,21 @@ The "0.3–0.6 observed band" previously used in the scorecard was uncited. Veri
 Honest positioning: emergent 0.50–0.59 lies BETWEEN ICCT real-world observations and the 0.61 label —
 defensible for a 92%-home-access private fleet without the company-car and never-charger segments.
 Scorecard band updated to cite these sources.
+
+## Verification against full ICCT Dec-2022 text (2026-07-27)
+- 26–56% below label confirmed verbatim; precision: MY2022 PHEVs (8–42 mi range), BAR 41–56%,
+  Fuelly 26–39%; sample-weighted mean reduction 31–44%.
+- Datasets: Fuelly 3,889 vehicles/97M mi (self-reported); CA BAR OBD 1,465 cleaned vehicles/24M mi
+  (mandatory, directly measured engine-off distance — first of its kind in the US).
+- KEY for our positioning: the paper shows EARLY-ADOPTER datasets (Volt/INL/CARB/Voltstats) matched
+  the EPA label curve, attributing below-label results in newer data to broader populations with
+  worse charging access. A 2026 MD fleet at 6.3% penetration with 92% home access is an
+  early-adopter population — our emergent 0.50–0.59 near the upper observed end, just below the
+  0.61 label, is exactly where the source's own reasoning places such a fleet.
+- CORRECTION to earlier note: the label MDIUF coefficients are NOT paywalled-only — reproduced in
+  40 CFR 600.116-12 Table 5 and in the ICCT paper's Table 1 (C1..C10 = 13.1, −18.7, 5.22, 8.15,
+  3.53, −1.34, −4.01, −3.9, −1.15, 3.88; ND = 399 mi).
+- Definitional note: EPA label UF = share of miles in charge-depleting mode; ICCT EDS = engine-off
+  miles share; our emergent metric = electric share of propulsion ENERGY (charged kWh over
+  charged + gasoline-deficit kWh). Closely related, not identical; comparisons across the three are
+  standard but should be named.
