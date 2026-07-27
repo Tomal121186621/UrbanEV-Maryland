@@ -39,3 +39,14 @@ Prius Prime 0.694, BMW family 0.526, Wrangler 4xe 0.487.
 - 40 CFR § 600.116-12 (UF = SAE J2841 §6.2, MDIUF, 399 mi) — ecfr.gov
 - SAE J2841_201009, Utility Factor Definitions for PHEVs Using Travel Survey Data
 - U.S. DOE/EPA fueleconomy.gov vehicle database (combinedUF field), retrieved 2026-07-27
+
+## Real-world (observed) benchmark sources — added 2026-07-27
+The "0.3–0.6 observed band" previously used in the scorecard was uncited. Verified sources:
+- **Isenstadt, Yang, Searle, German (ICCT WP, Dec 2022), Real World Usage of PHEVs in the United
+  States** (Fuelly + California BAR data): real-world electric drive share **26–56% below EPA label**
+  → implies ~0.27–0.45 against our 0.61 fleet label.
+- **Plötz, Moll, Bieker, Mock, Li (ICCT WP, Sept 2020)** (~100k PHEVs, CN/EU/NA): US private ≈0.53;
+  EU private 0.37–0.49; company cars 0.11–0.15.
+Honest positioning: emergent 0.50–0.59 lies BETWEEN ICCT real-world observations and the 0.61 label —
+defensible for a 92%-home-access private fleet without the company-car and never-charger segments.
+Scorecard band updated to cite these sources.
